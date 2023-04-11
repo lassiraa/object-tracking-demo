@@ -9,6 +9,27 @@ from torchvision.models.detection import (
 from torchvision.utils import draw_bounding_boxes
 
 
+class Game:
+    def __init__(self):
+        self.score = (0, 0)
+        self.player = 0
+        self.opponent = 1
+        self.winner = None
+
+    def decide_point(self, landing_zone: int):
+        if landing_zone == self.opponent:
+            self.score[self.player] += 1
+        else:
+            self.score[self.opponent] += 1
+        self.player, self.opponent = self.opponent, self.player
+
+    def check_winner(self):
+        if (max(self.score) > 20 and abs(self.score[0] - self.score[1]) > 1) or max(
+            self.score
+        ) == 30:
+            self.winner = int(self.score[1] > self.score[0])
+
+
 transform_bounding_boxes = lambda x: (x[0], x[1], x[2] - x[0], x[3] - x[1])
 get_center = lambda x: (x[0] + (x[2] - x[0]) / 2, x[1] + (x[3] - x[1]) / 2)
 calculate_distance = lambda p1, p2: abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
