@@ -34,6 +34,7 @@ class Game:
         else:
             self.score[self.opponent] += 1
         self.player, self.opponent = self.opponent, self.player
+        self.recent_locations = []
 
     def check_winner(self):
         if (max(self.score) > 20 and abs(self.score[0] - self.score[1]) > 1) or max(
@@ -58,7 +59,7 @@ class Game:
             del self.recent_locations[0]
         self.recent_locations.append(center)
         landing_zone = int(center[1] >= self.court_width)
-        if len(self.recent_locations) == 5 and self.calculate_traversed_distance() <= 2:
+        if len(self.recent_locations) == 5 and self.calculate_traversed_distance() <= 15:
             self.decide_point(landing_zone)
             if self.check_winner() is not None:
                 return self.winner
@@ -147,6 +148,15 @@ if __name__ == "__main__":
 
         # Draw a line to the image for visual clarity
         im[:,resolution[1] // 2,:] = 1 
+        im = cv2.putText(
+            im,
+            f"Game score: {game.score}",
+            (50,50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (255,0,0),
+            #cv2.LINE_AA
+        )
 
         cv2.imshow("frame", im)
         if cv2.waitKey(1) & 0xFF == ord("q"):
