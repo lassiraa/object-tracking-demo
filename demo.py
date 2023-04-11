@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import cv2
 import torch
 import torchvision.transforms as transforms
@@ -9,12 +11,22 @@ from torchvision.models.detection import (
 from torchvision.utils import draw_bounding_boxes
 
 
+# Transforms bounding box from xmin ymin, xmax, ymax to xmin, ymin, width, height
+transform_bounding_boxes = lambda x: (x[0], x[1], x[2] - x[0], x[3] - x[1])
+# Gets center point of a bounding box
+get_center = lambda x: (x[0] + (x[2] - x[0]) / 2, x[1] + (x[3] - x[1]) / 2)
+# Calculates manhattan distance from p1 to p2
+calculate_distance = lambda p1, p2: abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
+
+
 class Game:
-    def __init__(self):
-        self.score = (0, 0)
+    def __init__(self, court_width: int):
+        self.score = [0, 0]
         self.player = 0
         self.opponent = 1
         self.winner = None
+        self.court_width = court_width
+        self.recent_locations = []
 
     def decide_point(self, landing_zone: int):
         if landing_zone == self.opponent:
@@ -28,11 +40,32 @@ class Game:
             self.score
         ) == 30:
             self.winner = int(self.score[1] > self.score[0])
+            return self.winner
+        return None
 
+    def calculate_traversed_distance(self):
+        traversed_distance = 0
+        prev_location = None
+        for location in self.recent_locations:
+            if prev_location is None:
+                continue
+            traversed_distance += calculate_distance(location, prev_location)
+        return traversed_distance
 
-transform_bounding_boxes = lambda x: (x[0], x[1], x[2] - x[0], x[3] - x[1])
-get_center = lambda x: (x[0] + (x[2] - x[0]) / 2, x[1] + (x[3] - x[1]) / 2)
-calculate_distance = lambda p1, p2: abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
+    def update_game(self, location: Tuple[int]):
+        center = get_center(location)
+        if len(self.recent_locations) == 5:
+            del self.recent_locations[0]
+        self.recent_locations.append(center)
+        landing_zone = int(center[1] >= self.court_width)
+        if len(self.recent_locations) == 5 and self.calculate_traversed_distance() <= 2:
+            self.decide_point(landing_zone)
+            if self.check_winner() is not None:
+                return self.winner
+            return None
+
+# Use cell phone as object to track for game
+GAME_OBJECT_CLASS = "cell phone"
 
 if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -51,6 +84,11 @@ if __name__ == "__main__":
     cap = cv2.VideoCapture(0)
     track_locations = dict()
 
+    ret, frame = cap.read()
+    resolution = frame.shape
+
+    game = Game(resolution[1])
+
     while True:
         ret, frame = cap.read()
 
@@ -63,33 +101,36 @@ if __name__ == "__main__":
         preprocessed_frame = preprocess(frame_tensor)
 
         prediction = model([preprocessed_frame])[0]
-        bbs = [
-            (
-                transform_bounding_boxes(boxes.tolist()),
-                scores.item(),
-                weights.meta["categories"][labels.item()],
+
+        game_object_bbs = []
+        for boxes, score, label in zip(
+            prediction["boxes"], prediction["scores"], prediction["labels"]
+        ):
+            class_name = weights.meta["categories"][label.item()]
+            if class_name != GAME_OBJECT_CLASS:
+                continue
+            game_object_bbs.append(
+                (
+                    transform_bounding_boxes(boxes.tolist()),
+                    score.item(),
+                    class_name,
+                )
             )
-            for boxes, scores, labels in zip(
-                prediction["boxes"], prediction["scores"], prediction["labels"]
-            )
-        ]
-        tracks = tracker.update_tracks(bbs, frame=frame)
+
+        tracks = tracker.update_tracks(game_object_bbs, frame=frame)
+
         track_boxes = torch.zeros((0, 4), device=device)
         track_labels = []
         for track in tracks:
             if not track.is_confirmed():
                 continue
-            cur_location = track.to_ltrb()
+            obj_location = track.to_ltrb()
             track_id = track.track_id
             track_boxes = torch.cat(
-                [track_boxes, torch.tensor(cur_location.reshape((1, 4)), device=device)]
+                [track_boxes, torch.tensor(obj_location.reshape((1, 4)), device=device)]
             )
-            prev_location = track_locations.get(track_id, [0, 0, 0, 0])
-            prev_center = get_center(prev_location)
-            cur_center = get_center(cur_location)
-            distance = calculate_distance(prev_center, cur_center)
-            track_labels.append(f"{track.det_class} {track_id} - {distance}")
-            track_locations[track_id] = cur_location
+            game.update_game(obj_location)
+            track_labels.append(f"Track: {track_id}")
 
         if track_labels:
             box = draw_bounding_boxes(
@@ -103,6 +144,9 @@ if __name__ == "__main__":
             im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
         else:
             im = frame
+
+        # Draw a line to the image for visual clarity
+        im[:,resolution[1] // 2,:] = 1 
 
         cv2.imshow("frame", im)
         if cv2.waitKey(1) & 0xFF == ord("q"):
