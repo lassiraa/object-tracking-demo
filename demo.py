@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import cv2
 import torch
@@ -37,7 +37,7 @@ class Game:
         self.player, self.opponent = self.opponent, self.player
         self.recent_locations = []
 
-    def check_winner(self):
+    def check_winner(self) -> Union[int, None]:
         if (max(self.score) > 20 and abs(self.score[0] - self.score[1]) > 1) or max(
             self.score
         ) == 30:
@@ -53,7 +53,7 @@ class Game:
             prev_location = location
         return traversed_distance
 
-    def update_game(self, location: Tuple[int]):
+    def update_game(self, location: Tuple[int]) -> Union[int, None]:
         if self.winner is not None:
             return self.winner
         center = get_center(location)
