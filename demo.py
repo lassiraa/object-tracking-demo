@@ -62,11 +62,15 @@ class Game:
         self.recent_locations.append(center)
         landing_zone = int(center[0] >= (self.court_width // 2))
         traversed_distance = self.calculate_traversed_distance()
-        if len(self.recent_locations) == self.min_occurences and traversed_distance <= 15:
+        if (
+            len(self.recent_locations) == self.min_occurences
+            and traversed_distance <= 15
+        ):
             self.decide_point(landing_zone)
             if self.check_winner() is not None:
                 return self.winner
             return None
+
 
 # Object class to track for game
 GAME_OBJECT_CLASS = "person"
@@ -150,19 +154,14 @@ if __name__ == "__main__":
             im = frame
 
         # Draw a line to the image for visual clarity
-        im[:,resolution[1] // 2,:] = 1
+        im[:, resolution[1] // 2, :] = 1
         game_status = (
             f"Game score: {game.score}"
-            if game.winner is None else
-            f"Winner is player {game.winner}"
+            if game.winner is None
+            else f"Winner is player {game.winner}"
         )
         im = cv2.putText(
-            im,
-            game_status,
-            (50,50),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (255,0,0)
+            im, game_status, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0)
         )
 
         cv2.imshow("frame", im)
