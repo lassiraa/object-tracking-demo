@@ -27,6 +27,7 @@ class Game:
         self.winner = None
         self.court_width = court_width
         self.recent_locations = []
+        self.min_occurences = 10
 
     def decide_point(self, landing_zone: int):
         if landing_zone == self.opponent:
@@ -46,27 +47,29 @@ class Game:
 
     def calculate_traversed_distance(self):
         traversed_distance = 0
-        prev_location = None
+        prev_location = self.recent_locations[0]
         for location in self.recent_locations:
-            if prev_location is None:
-                continue
             traversed_distance += calculate_distance(location, prev_location)
+            prev_location = location
         return traversed_distance
 
     def update_game(self, location: Tuple[int]):
+        if self.winner is not None:
+            return self.winner
         center = get_center(location)
-        if len(self.recent_locations) == 5:
+        if len(self.recent_locations) == self.min_occurences:
             del self.recent_locations[0]
         self.recent_locations.append(center)
-        landing_zone = int(center[1] >= self.court_width)
-        if len(self.recent_locations) == 5 and self.calculate_traversed_distance() <= 15:
+        landing_zone = int(center[0] >= (self.court_width // 2))
+        traversed_distance = self.calculate_traversed_distance()
+        if len(self.recent_locations) == self.min_occurences and traversed_distance <= 15:
             self.decide_point(landing_zone)
             if self.check_winner() is not None:
                 return self.winner
             return None
 
-# Use cell phone as object to track for game
-GAME_OBJECT_CLASS = "cell phone"
+# Object class to track for game
+GAME_OBJECT_CLASS = "person"
 
 if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -147,15 +150,19 @@ if __name__ == "__main__":
             im = frame
 
         # Draw a line to the image for visual clarity
-        im[:,resolution[1] // 2,:] = 1 
+        im[:,resolution[1] // 2,:] = 1
+        game_status = (
+            f"Game score: {game.score}"
+            if game.winner is None else
+            f"Winner is player {game.winner}"
+        )
         im = cv2.putText(
             im,
-            f"Game score: {game.score}",
+            game_status,
             (50,50),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
-            (255,0,0),
-            #cv2.LINE_AA
+            (255,0,0)
         )
 
         cv2.imshow("frame", im)
